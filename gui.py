@@ -115,6 +115,9 @@ class SalitaIDE(tk.Tk):
 
         # State
         self.current_file_path = None
+        self.current_symbol_table = None  # Store symbol table for hover tooltips
+        self._tooltip_window = None       # Current tooltip window
+        self._last_tooltip_var = None     # Track last shown variable
 
         # Build the UI
         self._configure_styles()
@@ -264,6 +267,9 @@ class SalitaIDE(tk.Tk):
         self.code_editor.bind("<ButtonRelease-1>", self._on_code_change)
         self.code_editor.bind("<MouseWheel>", self._on_code_change)
 
+        # Bind hover event for variable tooltips
+        self.code_editor.bind("<Motion>", self._on_editor_hover)
+
         # ---- Right side: Output Panels (tabbed) ----
         output_frame = tk.Frame(pane, bg=BG_DARK, bd=0)
         pane.add(output_frame)
@@ -312,6 +318,26 @@ class SalitaIDE(tk.Tk):
         frame = tk.Frame(self.notebook, bg=BG_EDITOR)
         self.notebook.add(frame, text="🗺 AST Map")
 
+        # ── Toolbar row ──────────────────────────────────────────────
+        tb = tk.Frame(frame, bg=BG_SIDEBAR)
+        tb.pack(fill=tk.X)
+
+        btn_cfg = dict(bg=BTN_BG, fg=BTN_FG,
+                       font=("Segoe UI", 10), relief=tk.FLAT,
+                       padx=12, pady=4, cursor="hand2", bd=0)
+
+        tk.Button(tb, text="＋  Zoom In",  **btn_cfg,
+                  command=lambda: self._mm_zoom(1.25)).pack(side=tk.LEFT, padx=(6, 2), pady=4)
+        tk.Button(tb, text="－  Zoom Out", **btn_cfg,
+                  command=lambda: self._mm_zoom(0.8)).pack(side=tk.LEFT, padx=2, pady=4)
+        tk.Button(tb, text="⟳  Reset",    **btn_cfg,
+                  command=self._mm_reset_zoom).pack(side=tk.LEFT, padx=2, pady=4)
+
+        tk.Label(tb, text="Drag to pan  •  hover to highlight",
+                 bg=BG_SIDEBAR, fg=FG_LINE_NUM,
+                 font=("Segoe UI", 8)).pack(side=tk.RIGHT, padx=10)
+
+        # ── Canvas + scrollbars ───────────────────────────────────────
         canvas_wrap = tk.Frame(frame, bg=BG_EDITOR)
         canvas_wrap.pack(fill=tk.BOTH, expand=True)
 
@@ -334,23 +360,49 @@ class SalitaIDE(tk.Tk):
         self.mindmap_canvas.pack(fill=tk.BOTH, expand=True)
 
         # Pan support
-        self._mm_pan_start = None
-        self.mindmap_canvas.bind("<ButtonPress-2>",   self._mm_pan_start_cb)
-        self.mindmap_canvas.bind("<B2-Motion>",       self._mm_pan_cb)
-        self.mindmap_canvas.bind("<ButtonPress-1>",   self._mm_pan_start_cb)
-        self.mindmap_canvas.bind("<B1-Motion>",       self._mm_pan_cb)
+        self.mindmap_canvas.bind("<ButtonPress-1>", self._mm_pan_start_cb)
+        self.mindmap_canvas.bind("<B1-Motion>",     self._mm_pan_cb)
 
-        # Hint label
-        hint = tk.Label(frame, text="Drag to pan  •  nodes colored by type",
-                        bg=BG_EDITOR, fg=FG_LINE_NUM,
-                        font=("Segoe UI", 8))
-        hint.pack(side=tk.BOTTOM, anchor="w", padx=8, pady=2)
+        # Mouse-wheel zoom
+        self.mindmap_canvas.bind("<Control-MouseWheel>", self._mm_wheel_zoom)
+        self.mindmap_canvas.bind("<Control-Button-4>",
+                                 lambda e: self._mm_zoom(1.25))   # Linux scroll up
+        self.mindmap_canvas.bind("<Control-Button-5>",
+                                 lambda e: self._mm_zoom(0.8))    # Linux scroll down
+
+        self._mm_scale = 1.0       # current cumulative zoom scale
+        self._mm_last_tree = None  # last AST for reset
 
     def _mm_pan_start_cb(self, event):
         self.mindmap_canvas.scan_mark(event.x, event.y)
 
     def _mm_pan_cb(self, event):
         self.mindmap_canvas.scan_dragto(event.x, event.y, gain=1)
+
+    def _mm_wheel_zoom(self, event):
+        factor = 1.25 if event.delta > 0 else 0.8
+        self._mm_zoom(factor)
+
+    def _mm_zoom(self, factor):
+        """Scale all canvas items around the visible center."""
+        c = self.mindmap_canvas
+        new_scale = self._mm_scale * factor
+        # Clamp zoom between 0.2× and 4×
+        if not (0.2 <= new_scale <= 4.0):
+            return
+        self._mm_scale = new_scale
+
+        # Scale everything around canvas origin (0, 0)
+        c.scale("all", 0, 0, factor, factor)
+
+        # Update scroll region to match
+        c.configure(scrollregion=c.bbox("all"))
+
+    def _mm_reset_zoom(self):
+        """Reset zoom to 1× and re-render."""
+        if self._mm_last_tree is not None:
+            self._mm_scale = 1.0
+            self.render_mindmap(self._mm_last_tree)
 
     # ------------------------------------------------------------------
     # Mindmap: AST → node tree
@@ -425,6 +477,34 @@ class SalitaIDE(tk.Tk):
             self._assign_positions(child, cx, top_y + MM_NODE_H + MM_V_GAP)
             cx += child.subtree_w + MM_H_GAP
 
+    def _show_mm_tooltip(self, event, text):
+        """Show a floating tooltip near the cursor on the mindmap canvas."""
+        self._hide_mm_tooltip()
+        tw = tk.Toplevel(self.mindmap_canvas)
+        tw.wm_overrideredirect(True)
+        tw.wm_attributes("-topmost", True)
+        lbl = tk.Label(tw, text=text,
+                       bg="#313244", fg="#cdd6f4",
+                       font=("Segoe UI", 9, "bold"),
+                       padx=8, pady=4,
+                       relief=tk.FLAT, bd=0)
+        lbl.pack()
+        # Position just below the cursor
+        x = event.x_root + 12
+        y = event.y_root + 14
+        tw.wm_geometry(f"+{x}+{y}")
+        self._mm_tooltip_win = tw
+
+    def _hide_mm_tooltip(self, _event=None):
+        """Destroy the current tooltip if it exists."""
+        win = getattr(self, "_mm_tooltip_win", None)
+        if win:
+            try:
+                win.destroy()
+            except Exception:
+                pass
+            self._mm_tooltip_win = None
+
     def _draw_mnode(self, c, m):
         """Draw a single mindmap node on canvas c."""
         x, y = m.cx, m.cy
@@ -445,16 +525,21 @@ class SalitaIDE(tk.Tk):
         tag = f"node_{id(m)}"
         shape = c.create_polygon(pts, smooth=True,
                                   fill=m.fill, outline="", tags=(tag, "node"))
-        # Label
-        label = m.label if len(m.label) <= 16 else m.label[:14] + "…"
-        text = c.create_text(x, y, text=label, fill=m.fg,
-                              font=("Segoe UI", 9, "bold"), tags=(tag, "node"))
+        # Label (truncated for display)
+        display_label = m.label if len(m.label) <= 16 else m.label[:14] + "…"
+        c.create_text(x, y, text=display_label, fill=m.fg,
+                      font=("Segoe UI", 9, "bold"), tags=(tag, "node"))
 
-        # Hover: brighten outline
-        def on_enter(_, s=shape):
+        # Hover: brighten outline + show tooltip with full label
+        full_label = m.label
+
+        def on_enter(event, s=shape):
             c.itemconfig(s, outline="#ffffff", width=2)
+            self._show_mm_tooltip(event, full_label)
+
         def on_leave(_, s=shape):
             c.itemconfig(s, outline="", width=1)
+            self._hide_mm_tooltip()
 
         c.tag_bind(tag, "<Enter>", on_enter)
         c.tag_bind(tag, "<Leave>", on_leave)
@@ -471,6 +556,8 @@ class SalitaIDE(tk.Tk):
 
     def render_mindmap(self, tree):
         """Build and render the mindmap for the given AST."""
+        self._mm_last_tree = tree
+        self._mm_scale = 1.0
         c = self.mindmap_canvas
         c.delete("all")
 
@@ -523,6 +610,8 @@ class SalitaIDE(tk.Tk):
         """Called on every keypress / click — updates line numbers and highlighting."""
         self._update_line_numbers()
         self._update_syntax_highlighting()
+        # Hide tooltip when code changes (values may be stale)
+        self._hide_tooltip()
 
     def _update_line_numbers(self):
         """Regenerate line number gutter."""
@@ -601,6 +690,100 @@ output total;
         self.code_editor.insert("1.0", sample)
         self._on_code_change()
 
+    def _on_editor_hover(self, event):
+        """Called on mouse motion in editor — show variable value tooltip."""
+        if not self.current_symbol_table:
+            self._hide_tooltip()
+            return
+
+        try:
+            # Get position under cursor
+            pos = self.code_editor.index(f"@{event.x},{event.y}")
+            line_num, col = pos.split(".")
+            col = int(col)
+
+            # Get the word at cursor position
+            line_text = self.code_editor.get(f"{line_num}.0", f"{line_num}.end")
+
+            # Extract the word boundaries
+            start = col
+            end = col
+
+            # Move start backwards to find word beginning
+            while start > 0 and (line_text[start - 1].isalnum() or line_text[start - 1] == '_'):
+                start -= 1
+
+            # Move end forward to find word end
+            while end < len(line_text) and (line_text[end].isalnum() or line_text[end] == '_'):
+                end += 1
+
+            # Extract the word
+            if start < len(line_text) and end > start:
+                word = line_text[start:end]
+
+                # Only show tooltip for valid identifiers (not keywords)
+                if word and word[0].isalpha() or word[0] == '_':
+                    if word not in SALITA_KEYWORDS:
+                        # Look up in symbol table
+                        entries = self.current_symbol_table.get_entries()
+                        for entry in entries:
+                            if entry.name == word:
+                                self._show_tooltip(event, word, entry.value)
+                                return
+
+            # No variable found under cursor
+            self._hide_tooltip()
+        except Exception:
+            # Silently handle any errors during hover
+            self._hide_tooltip()
+
+    def _show_tooltip(self, event, var_name, var_value):
+        """Show a tooltip with variable value near the cursor."""
+        # Don't create a new tooltip if showing the same variable
+        if self._last_tooltip_var == var_name and self._tooltip_window:
+            return
+
+        # Hide previous tooltip
+        self._hide_tooltip()
+
+        # Create tooltip window
+        tooltip = tk.Toplevel(self.code_editor)
+        tooltip.wm_overrideredirect(True)
+        tooltip.wm_attributes("-topmost", True)
+        tooltip.configure(bg=BG_DARK, bd=0)
+
+        # Create label with variable name and value
+        label = tk.Label(
+            tooltip,
+            text=f"{var_name} = {var_value}",
+            bg="#313244",
+            fg=ACCENT,
+            font=("Consolas", 10, "bold"),
+            padx=10,
+            pady=6,
+            relief=tk.FLAT,
+            bd=0
+        )
+        label.pack()
+
+        # Position tooltip above the cursor
+        x = event.x_root + 12
+        y = event.y_root - 30
+        tooltip.wm_geometry(f"+{x}+{y}")
+
+        self._tooltip_window = tooltip
+        self._last_tooltip_var = var_name
+
+    def _hide_tooltip(self):
+        """Destroy the current tooltip if it exists."""
+        if self._tooltip_window:
+            try:
+                self._tooltip_window.destroy()
+            except Exception:
+                pass
+        self._tooltip_window = None
+        self._last_tooltip_var = None
+
     # ==========================================================================
     # Output Panel Helpers
     # ==========================================================================
@@ -632,6 +815,8 @@ output total;
                        self.semantic_output, self.program_output,
                        self.error_output, self.symbol_output):
             self._set_output(widget, "")
+        self.current_symbol_table = None  # Clear symbol table
+        self._hide_tooltip()
         self.status_var.set("Output cleared.")
 
     # ==========================================================================
@@ -650,6 +835,8 @@ output total;
                 self.code_editor.delete("1.0", tk.END)
                 self.code_editor.insert("1.0", code)
                 self.current_file_path = path
+                self.current_symbol_table = None  # Clear old symbol table
+                self._hide_tooltip()
                 self._on_code_change()
                 self.status_var.set(f"Loaded: {os.path.basename(path)}")
             except Exception as ex:
@@ -746,6 +933,7 @@ output total;
             analyzer = SemanticAnalyzer()
             analyzer.analyze(tree)
             symbol_table = analyzer.symbol_table
+            self.current_symbol_table = symbol_table  # Store for hover tooltips
         except SemanticError as e:
             self._set_output(self.error_output, f"❌ {e}", "error")
             self._set_output(self.semantic_output,
