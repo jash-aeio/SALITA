@@ -10,12 +10,11 @@
 """
 
 # ==============================================================================
-# KEYWORD TOKENS (Filipino keywords)
+# KEYWORD TOKENS
 # ==============================================================================
-KEYWORD_BARYABOL = 'KEYWORD'      # baryabol  -> variable declaration
-KEYWORD_KUHA     = 'KEYWORD'      # kuha      -> input statement
-KEYWORD_IPAKITA  = 'KEYWORD'      # ipakita   -> output statement
-KEYWORD_LAGAY    = 'KEYWORD'      # lagay     -> assignment statement
+KEYWORD_VAR    = 'KEYWORD'        # var    -> variable declaration
+KEYWORD_INPUT  = 'KEYWORD'        # input  -> input statement
+KEYWORD_OUTPUT = 'KEYWORD'        # output -> output statement
 
 # ==============================================================================
 # LITERAL AND IDENTIFIER TOKENS
@@ -49,10 +48,9 @@ EOF     = 'EOF'                  # End of file / end of input
 # ==============================================================================
 # These are the "precise" internal types. The display type above is used for
 # the token table shown to the user.
-T_BARYABOL = 'BARYABOL'
-T_KUHA     = 'KUHA'
-T_IPAKITA  = 'IPAKITA'
-T_LAGAY    = 'LAGAY'
+T_VAR      = 'VAR'
+T_INPUT    = 'INPUT'
+T_OUTPUT   = 'OUTPUT'
 T_ID       = 'IDENTIFIER'
 T_NUMBER   = 'NUMBER'
 T_PLUS     = 'PLUS'
@@ -66,23 +64,21 @@ T_RPAREN   = 'RPAREN'
 T_EOF      = 'EOF'
 
 # ==============================================================================
-# KEYWORD MAP  (Filipino keyword string -> internal token type)
+# KEYWORD MAP  (keyword string -> internal token type)
 # ==============================================================================
 KEYWORDS = {
-    'baryabol': T_BARYABOL,
-    'kuha':     T_KUHA,
-    'ipakita':  T_IPAKITA,
-    'lagay':    T_LAGAY,
+    'var':    T_VAR,
+    'input':  T_INPUT,
+    'output': T_OUTPUT,
 }
 
 # ==============================================================================
 # DISPLAY TYPE MAP (internal type -> user-facing display type for token table)
 # ==============================================================================
 DISPLAY_TYPE = {
-    T_BARYABOL: 'KEYWORD',
-    T_KUHA:     'KEYWORD',
-    T_IPAKITA:  'KEYWORD',
-    T_LAGAY:    'KEYWORD',
+    T_VAR:      'KEYWORD',
+    T_INPUT:    'KEYWORD',
+    T_OUTPUT:   'KEYWORD',
     T_ID:       'IDENTIFIER',
     T_NUMBER:   'NUMBER',
     T_PLUS:     'OPERATOR',

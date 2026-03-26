@@ -1,18 +1,15 @@
 /* ============================================ */
-/* Halimbawa ng SALITA Program                  */
-/* (Sample SALITA Program)                      */
-/*                                              */
-/* Layunin: Mag-input ng dalawang numero at     */
-/* ipakita ang resulta ng (x + y) * 2           */
+/* Sample SALITA Program                        */
+/* Input two numbers and display (x + y) * 2   */
 /* ============================================ */
 
-baryabol x;
-baryabol y;
-baryabol total;
+var x;
+var y;
+var total;
 
-kuha x;
-kuha y;
+input x;
+input y;
 
-lagay total = (x + y) * 2;
+total = (x + y) * 2;
 
-ipakita total;
+output total;

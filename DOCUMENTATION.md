@@ -25,14 +25,13 @@
 
 SALITA is a **Filipino-based programming language** designed to help beginners learn programming concepts using **Tagalog keywords** instead of English syntax. The language models constructs found in C, Python, and Java, making it a familiar stepping stone into those languages.
 
-### Filipino Keywords
+### Keywords
 
-| English Equivalent     | SALITA Keyword | Description                        |
-|------------------------|----------------|------------------------------------|
-| Variable declaration   | `baryabol`     | Declares a new integer variable    |
-| Input                  | `kuha`         | Reads an integer from the user     |
-| Output                 | `ipakita`      | Displays the value of a variable   |
-| Assignment             | `lagay`        | Assigns an expression to a variable|
+| Function           | Keyword    | Description                        |
+|--------------------|------------|------------------------------------|
+| Variable declaration| `var`      | Declares a new integer variable    |
+| Input              | `input`    | Reads an integer from the console  |
+| Output             | `output`   | Displays the value of a variable   |
 
 ### Language Rules
 
@@ -43,20 +42,21 @@ SALITA is a **Filipino-based programming language** designed to help beginners l
 5. **Allowed arithmetic operators**: `+`, `-`, `*`, `/`.
 6. **Parentheses** `( )` can be used to control operator precedence.
 7. **Variable names**: can contain letters, digits, and underscores (`_`), but **cannot start with a digit**.
+8. **Assignments** use the `=` operator without a keyword: `variable = expression;`
 
 ### Example Program
 
 ```
-baryabol x;
-baryabol y;
-baryabol total;
+var x;
+var y;
+var total;
 
-kuha x;
-kuha y;
+input x;
+input y;
 
-lagay total = (x + y) * 2;
+total = (x + y) * 2;
 
-ipakita total;
+output total;
 ```
 
 ---
@@ -65,14 +65,14 @@ ipakita total;
 
 | Feature                | C               | Python            | SALITA               |
 |------------------------|-----------------|-------------------|----------------------|
-| Variable declaration   | `int x;`        | `x = 0`           | `baryabol x;`        |
-| User input             | `scanf("%d",&x)`| `x = int(input())`| `kuha x;`            |
-| Print output           | `printf("%d",x)`| `print(x)`        | `ipakita x;`         |
-| Assignment             | `x = 5 + y;`   | `x = 5 + y`       | `lagay x = 5 + y;`   |
+| Variable declaration   | `int x;`        | `x = 0`           | `var x;`             |
+| User input             | `scanf("%d",&x)`| `x = int(input())`| `input x;`           |
+| Print output           | `printf("%d",x)`| `print(x)`        | `output x;`          |
+| Assignment             | `x = 5 + y;`   | `x = 5 + y`       | `x = 5 + y;`         |
 | Statement terminator   | `;`             | Newline            | `;`                  |
-| Comments               | `/* comment */` | `# comment`        | `/* comment */`       |
-| Data types             | Multiple        | Dynamic            | Integer only          |
-| Compilation model      | Compiled        | Interpreted        | Interpreted (AST)     |
+| Comments               | `/* comment */` | `# comment`        | `/* comment */`      |
+| Data types             | Multiple        | Dynamic            | Integer only         |
+| Compilation model      | Compiled        | Interpreted        | Interpreted (AST)    |
 
 **Key Design Decision**: SALITA uses explicit declaration with `baryabol` (like C/Java) rather than implicit declaration (like Python). This teaches beginners the concept of variable scope and type awareness.
 
@@ -93,13 +93,13 @@ statement      → declaration
                | output_stmt
                | assignment
 
-declaration    → 'baryabol' IDENTIFIER ';'
+declaration    → 'var' IDENTIFIER ';'
 
-input_stmt     → 'kuha' IDENTIFIER ';'
+input_stmt     → 'input' IDENTIFIER ';'
 
-output_stmt    → 'ipakita' IDENTIFIER ';'
+output_stmt    → 'output' IDENTIFIER ';'
 
-assignment     → 'lagay' IDENTIFIER '=' expression ';'
+assignment     → IDENTIFIER '=' expression ';'
 
 expression     → term (('+' | '-') term)*
 
@@ -422,16 +422,16 @@ The executable will be created in the `dist/` folder.
 
 **Input program:**
 ```
-baryabol x;
-baryabol y;
-baryabol total;
+var x;
+var y;
+var total;
 
-kuha x;
-kuha y;
+input x;
+input y;
 
-lagay total = (x + y) * 2;
+total = (x + y) * 2;
 
-ipakita total;
+output total;
 ```
 
 **User inputs**: x = 5, y = 10
@@ -441,10 +441,10 @@ ipakita total;
 ```
 ## TOKENS
 
-  [KEYWORD:baryabol]
+  [KEYWORD:var]
   [IDENTIFIER:x]
   [SEMICOLON:;]
-  [KEYWORD:baryabol]
+  [KEYWORD:var]
   [IDENTIFIER:y]
   [SEMICOLON:;]
   ...
@@ -468,19 +468,19 @@ ipakita total;
 
 **Input program:**
 ```
-baryabol haba;
-baryabol lapad;
-baryabol area;
+var length;
+var width;
+var area;
 
-kuha haba;
-kuha lapad;
+input length;
+input width;
 
-lagay area = haba * lapad;
+area = length * width;
 
-ipakita area;
+output area;
 ```
 
-**User inputs**: haba = 7, lapad = 4
+**User inputs**: length = 7, width = 4
 
 **Expected output**: `28`
 
@@ -488,21 +488,21 @@ ipakita area;
 
 **Input program:**
 ```
-baryabol a;
-baryabol b;
-baryabol c;
-baryabol sagot;
-baryabol sagot2;
+var a;
+var b;
+var c;
+var result1;
+var result2;
 
-kuha a;
-kuha b;
-kuha c;
+input a;
+input b;
+input c;
 
-lagay sagot = a + b * c;
-lagay sagot2 = (a + b) * c;
+result1 = a + b * c;
+result2 = (a + b) * c;
 
-ipakita sagot;
-ipakita sagot2;
+output result1;
+output result2;
 ```
 
 **User inputs**: a = 2, b = 3, c = 4
@@ -514,8 +514,8 @@ ipakita sagot2;
 ```
 
 **Explanation**:
-- `sagot = 2 + 3 * 4 = 2 + 12 = 14` (multiplication first)
-- `sagot2 = (2 + 3) * 4 = 5 * 4 = 20` (parentheses override)
+- `result1 = 2 + 3 * 4 = 2 + 12 = 14` (multiplication first)
+- `result2 = (2 + 3) * 4 = 5 * 4 = 20` (parentheses override)
 
 ---
 

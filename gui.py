@@ -62,7 +62,29 @@ BUTTON_FONT   = ("Segoe UI", 10)
 TAB_FONT      = ("Segoe UI", 10)
 STATUS_FONT   = ("Segoe UI", 9)
 
-SALITA_KEYWORDS = {"baryabol", "kuha", "ipakita", "lagay"}
+SALITA_KEYWORDS = {"var", "input", "output"}
+
+# ==============================================================================
+# Mindmap Layout Constants
+# ==============================================================================
+MM_NODE_W  = 130
+MM_NODE_H  = 36
+MM_H_GAP   = 28
+MM_V_GAP   = 72
+MM_RADIUS  = 8
+
+# Fill, text color per AST node type
+MM_COLORS = {
+    "Program":    ("#cba6f7", "#11111b"),
+    "VarDecl":    ("#a6e3a1", "#11111b"),
+    "InputStmt":  ("#89b4fa", "#11111b"),
+    "OutputStmt": ("#f9e2af", "#11111b"),
+    "Assignment": ("#fab387", "#11111b"),
+    "BinOp":      ("#89dceb", "#11111b"),
+    "Num":        ("#b5e8e0", "#11111b"),
+    "Var":        ("#585b70", "#cdd6f4"),
+}
+MM_DEFAULT_COLOR = ("#45475a", "#cdd6f4")
 
 # ==============================================================================
 # Main Application Class
@@ -256,6 +278,7 @@ class SalitaIDE(tk.Tk):
         self.program_output  = self._create_output_tab("📟 Output")
         self.error_output    = self._create_output_tab("⚠ Errors")
         self.symbol_output   = self._create_output_tab("📊 Symbols")
+        self._create_mindmap_tab()
 
     def _create_output_tab(self, title: str) -> scrolledtext.ScrolledText:
         """Create a single tab with a read-only ScrolledText widget."""
@@ -283,6 +306,196 @@ class SalitaIDE(tk.Tk):
         text_widget.tag_configure("operator", foreground=FG_OPERATOR)
 
         return text_widget
+
+    def _create_mindmap_tab(self):
+        """Create the interactive AST mindmap Canvas tab."""
+        frame = tk.Frame(self.notebook, bg=BG_EDITOR)
+        self.notebook.add(frame, text="🗺 AST Map")
+
+        canvas_wrap = tk.Frame(frame, bg=BG_EDITOR)
+        canvas_wrap.pack(fill=tk.BOTH, expand=True)
+
+        self.mindmap_canvas = tk.Canvas(
+            canvas_wrap, bg=BG_EDITOR, bd=0,
+            highlightthickness=0, relief=tk.FLAT
+        )
+        h_bar = tk.Scrollbar(canvas_wrap, orient=tk.HORIZONTAL,
+                             command=self.mindmap_canvas.xview,
+                             bg=BG_DARK, troughcolor=BG_EDITOR)
+        v_bar = tk.Scrollbar(canvas_wrap, orient=tk.VERTICAL,
+                             command=self.mindmap_canvas.yview,
+                             bg=BG_DARK, troughcolor=BG_EDITOR)
+        self.mindmap_canvas.configure(
+            xscrollcommand=h_bar.set,
+            yscrollcommand=v_bar.set
+        )
+        h_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        v_bar.pack(side=tk.RIGHT,  fill=tk.Y)
+        self.mindmap_canvas.pack(fill=tk.BOTH, expand=True)
+
+        # Pan support
+        self._mm_pan_start = None
+        self.mindmap_canvas.bind("<ButtonPress-2>",   self._mm_pan_start_cb)
+        self.mindmap_canvas.bind("<B2-Motion>",       self._mm_pan_cb)
+        self.mindmap_canvas.bind("<ButtonPress-1>",   self._mm_pan_start_cb)
+        self.mindmap_canvas.bind("<B1-Motion>",       self._mm_pan_cb)
+
+        # Hint label
+        hint = tk.Label(frame, text="Drag to pan  •  nodes colored by type",
+                        bg=BG_EDITOR, fg=FG_LINE_NUM,
+                        font=("Segoe UI", 8))
+        hint.pack(side=tk.BOTTOM, anchor="w", padx=8, pady=2)
+
+    def _mm_pan_start_cb(self, event):
+        self.mindmap_canvas.scan_mark(event.x, event.y)
+
+    def _mm_pan_cb(self, event):
+        self.mindmap_canvas.scan_dragto(event.x, event.y, gain=1)
+
+    # ------------------------------------------------------------------
+    # Mindmap: AST → node tree
+    # ------------------------------------------------------------------
+    class _MNode:
+        """Lightweight mindmap node holding label, color, children."""
+        __slots__ = ("label", "fill", "fg", "children", "cx", "cy", "subtree_w")
+        def __init__(self, label, fill, fg):
+            self.label    = label
+            self.fill     = fill
+            self.fg       = fg
+            self.children = []
+            self.cx = self.cy = self.subtree_w = 0
+
+    def _ast_to_mnodes(self, node):
+        """Recursively convert an AST node to a _MNode tree."""
+        from parser import (Program, VarDecl, InputStmt, OutputStmt,
+                            Assignment, BinOp, Num, Var)
+
+        def color(kind):
+            c = MM_COLORS.get(kind, MM_DEFAULT_COLOR)
+            return c[0], c[1]
+
+        def build(n):
+            if isinstance(n, Program):
+                m = self._MNode("Program", *color("Program"))
+                m.children = [build(s) for s in n.statements]
+                return m
+            elif isinstance(n, VarDecl):
+                m = self._MNode(f"var {n.var_node.value}", *color("VarDecl"))
+                return m
+            elif isinstance(n, InputStmt):
+                m = self._MNode(f"input {n.var_node.value}", *color("InputStmt"))
+                return m
+            elif isinstance(n, OutputStmt):
+                m = self._MNode(f"output {n.var_node.value}", *color("OutputStmt"))
+                return m
+            elif isinstance(n, Assignment):
+                m = self._MNode(f"{n.var_node.value} =", *color("Assignment"))
+                m.children = [build(n.expr)]
+                return m
+            elif isinstance(n, BinOp):
+                m = self._MNode(n.op_token.value, *color("BinOp"))
+                m.children = [build(n.left), build(n.right)]
+                return m
+            elif isinstance(n, Num):
+                return self._MNode(str(n.value), *color("Num"))
+            elif isinstance(n, Var):
+                return self._MNode(n.value, *color("Var"))
+            else:
+                return self._MNode(type(n).__name__, *MM_DEFAULT_COLOR)
+
+        return build(node)
+
+    def _calc_subtree_w(self, m):
+        if not m.children:
+            m.subtree_w = MM_NODE_W
+            return MM_NODE_W
+        total = sum(self._calc_subtree_w(c) for c in m.children)
+        total += MM_H_GAP * (len(m.children) - 1)
+        m.subtree_w = max(MM_NODE_W, total)
+        return m.subtree_w
+
+    def _assign_positions(self, m, left_x, top_y):
+        m.cx = left_x + m.subtree_w / 2
+        m.cy = top_y + MM_NODE_H / 2
+        if not m.children:
+            return
+        total_ch = sum(c.subtree_w for c in m.children) + MM_H_GAP * (len(m.children) - 1)
+        cx = left_x + (m.subtree_w - total_ch) / 2
+        for child in m.children:
+            self._assign_positions(child, cx, top_y + MM_NODE_H + MM_V_GAP)
+            cx += child.subtree_w + MM_H_GAP
+
+    def _draw_mnode(self, c, m):
+        """Draw a single mindmap node on canvas c."""
+        x, y = m.cx, m.cy
+        hw, hh = MM_NODE_W / 2, MM_NODE_H / 2
+        r = MM_RADIUS
+
+        # Rounded rectangle via polygon approximation
+        pts = [
+            x - hw + r, y - hh,
+            x + hw - r, y - hh,
+            x + hw,     y - hh + r,
+            x + hw,     y + hh - r,
+            x + hw - r, y + hh,
+            x - hw + r, y + hh,
+            x - hw,     y + hh - r,
+            x - hw,     y - hh + r,
+        ]
+        tag = f"node_{id(m)}"
+        shape = c.create_polygon(pts, smooth=True,
+                                  fill=m.fill, outline="", tags=(tag, "node"))
+        # Label
+        label = m.label if len(m.label) <= 16 else m.label[:14] + "…"
+        text = c.create_text(x, y, text=label, fill=m.fg,
+                              font=("Segoe UI", 9, "bold"), tags=(tag, "node"))
+
+        # Hover: brighten outline
+        def on_enter(_, s=shape):
+            c.itemconfig(s, outline="#ffffff", width=2)
+        def on_leave(_, s=shape):
+            c.itemconfig(s, outline="", width=1)
+
+        c.tag_bind(tag, "<Enter>", on_enter)
+        c.tag_bind(tag, "<Leave>", on_leave)
+
+    def _draw_tree(self, c, m):
+        """Recursively draw edges then nodes."""
+        for child in m.children:
+            # Edge: parent bottom-center → child top-center
+            c.create_line(m.cx, m.cy + MM_NODE_H / 2,
+                          child.cx, child.cy - MM_NODE_H / 2,
+                          fill="#585b70", width=1.5, smooth=True)
+            self._draw_tree(c, child)
+        self._draw_mnode(c, m)
+
+    def render_mindmap(self, tree):
+        """Build and render the mindmap for the given AST."""
+        c = self.mindmap_canvas
+        c.delete("all")
+
+        if tree is None:
+            c.create_text(200, 100, text="No AST to display.",
+                          fill=FG_LINE_NUM, font=("Segoe UI", 11))
+            return
+
+        root = self._ast_to_mnodes(tree)
+        self._calc_subtree_w(root)
+        PADDING = 40
+        self._assign_positions(root, PADDING, PADDING)
+
+        self._draw_tree(c, root)
+
+        # Update scroll region
+        total_w = root.subtree_w + PADDING * 2
+        # find max depth
+        def max_depth(m, d=0):
+            if not m.children:
+                return d
+            return max(max_depth(ch, d + 1) for ch in m.children)
+        depth = max_depth(root)
+        total_h = PADDING * 2 + (depth + 1) * (MM_NODE_H + MM_V_GAP)
+        c.configure(scrollregion=(0, 0, total_w, total_h))
 
     def _build_status_bar(self):
         """Build the status bar at the bottom of the window."""
@@ -372,19 +585,18 @@ class SalitaIDE(tk.Tk):
 
     def _insert_sample_code(self):
         """Insert a default SALITA example program into the editor."""
-        sample = """/* Halimbawa ng SALITA Program */
-/* Sample SALITA Program        */
+        sample = """/* Sample SALITA Program */
 
-baryabol x;
-baryabol y;
-baryabol total;
+var x;
+var y;
+var total;
 
-kuha x;
-kuha y;
+input x;
+input y;
 
-lagay total = (x + y) * 2;
+total = (x + y) * 2;
 
-ipakita total;
+output total;
 """
         self.code_editor.insert("1.0", sample)
         self._on_code_change()
@@ -522,6 +734,9 @@ ipakita total;
         self._append_output(self.parse_output,
                             "── Abstract Syntax Tree ──\n\n", "heading")
         self._append_output(self.parse_output, ast_to_string(tree) + "\n")
+
+        # Render interactive mindmap
+        self.render_mindmap(tree)
 
         # ---- Phase 3: Semantic Analysis ----
         self.status_var.set("Phase 3: Semantic Analysis...")

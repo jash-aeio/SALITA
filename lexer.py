@@ -21,6 +21,7 @@ from token_types import (
     T_ID, T_NUMBER,
     T_PLUS, T_MINUS, T_MUL, T_DIV, T_ASSIGN,
     T_SEMI, T_LPAREN, T_RPAREN, T_EOF,
+    T_VAR, T_INPUT, T_OUTPUT,
 )
 
 

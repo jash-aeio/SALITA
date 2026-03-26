@@ -1,27 +1,24 @@
 /* ============================================ */
-/* SALITA Sample 3 - Kumplikadong Arithmetic    */
-/* (Complex arithmetic expression)              */
-/*                                              */
-/* Layunin: Ipakita ang expression evaluation   */
-/* na may tamang operator precedence at         */
-/* paggamit ng parentheses.                     */
+/* SALITA Sample - Complex Arithmetic           */
+/* Demonstrates operator precedence and        */
+/* parentheses for expression evaluation       */
 /* ============================================ */
 
-baryabol a;
-baryabol b;
-baryabol c;
-baryabol sagot;
-baryabol sagot2;
+var a;
+var b;
+var c;
+var result1;
+var result2;
 
-kuha a;
-kuha b;
-kuha c;
+input a;
+input b;
+input c;
 
-/* sagot = a + b * c   (multiplication first) */
-lagay sagot = a + b * c;
+/* result1 = a + b * c   (multiplication first) */
+result1 = a + b * c;
 
-/* sagot2 = (a + b) * c  (parentheses override precedence) */
-lagay sagot2 = (a + b) * c;
+/* result2 = (a + b) * c  (parentheses override precedence) */
+result2 = (a + b) * c;
 
-ipakita sagot;
-ipakita sagot2;
+output result1;
+output result2;

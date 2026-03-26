@@ -13,10 +13,10 @@
     program        → statement_list
     statement_list → statement statement_list | statement
     statement      → declaration | input_stmt | output_stmt | assignment
-    declaration    → 'baryabol' IDENTIFIER ';'
-    input_stmt     → 'kuha' IDENTIFIER ';'
-    output_stmt    → 'ipakita' IDENTIFIER ';'
-    assignment     → 'lagay' IDENTIFIER '=' expression ';'
+    declaration    → 'var' IDENTIFIER ';'
+    input_stmt     → 'input' IDENTIFIER ';'
+    output_stmt    → 'output' IDENTIFIER ';'
+    assignment     → IDENTIFIER '=' expression ';'
     expression     → term (( '+' | '-' ) term)*
     term           → factor (( '*' | '/' ) factor)*
     factor         → NUMBER | IDENTIFIER | '(' expression ')'
@@ -24,7 +24,7 @@
 """
 
 from token_types import (
-    T_BARYABOL, T_KUHA, T_IPAKITA, T_LAGAY,
+    T_VAR, T_INPUT, T_OUTPUT,
     T_ID, T_NUMBER,
     T_PLUS, T_MINUS, T_MUL, T_DIV, T_ASSIGN,
     T_SEMI, T_LPAREN, T_RPAREN, T_EOF,
@@ -55,25 +55,25 @@ class Program(AST):
 
 
 class VarDecl(AST):
-    """Variable declaration: baryabol <name> ;"""
+    """Variable declaration: var <name> ;"""
     def __init__(self, var_node):
         self.var_node = var_node  # Var node holding the identifier
 
 
 class InputStmt(AST):
-    """Input statement: kuha <name> ;"""
+    """Input statement: input <name> ;"""
     def __init__(self, var_node):
         self.var_node = var_node
 
 
 class OutputStmt(AST):
-    """Output statement: ipakita <name> ;"""
+    """Output statement: output <name> ;"""
     def __init__(self, var_node):
         self.var_node = var_node
 
 
 class Assignment(AST):
-    """Assignment: lagay <name> = <expression> ;"""
+    """Assignment: <name> = <expression> ;"""
     def __init__(self, var_node, op_token, expr):
         self.var_node = var_node   # Left-hand side (Var node)
         self.op_token = op_token   # The '=' token
@@ -144,6 +144,7 @@ class Parser:
                 f"{self.current_token.type} ('{self.current_token.value}')."
             )
 
+
     # --------------------------------------------------------------------------
     # Grammar Rules (each method corresponds to one grammar production)
     # --------------------------------------------------------------------------
@@ -172,23 +173,23 @@ class Parser:
         """
         tok = self.current_token
 
-        if tok.type == T_BARYABOL:
+        if tok.type == T_VAR:
             return self.declaration()
-        elif tok.type == T_KUHA:
+        elif tok.type == T_INPUT:
             return self.input_stmt()
-        elif tok.type == T_IPAKITA:
+        elif tok.type == T_OUTPUT:
             return self.output_stmt()
-        elif tok.type == T_LAGAY:
+        elif tok.type == T_ID:
             return self.assignment()
         else:
             self.error(
-                f"Expected a statement (baryabol, kuha, ipakita, or lagay), "
+                f"Expected a statement (var, input, output, or assignment), "
                 f"but got '{tok.value}'."
             )
 
     def declaration(self) -> VarDecl:
-        """declaration → 'baryabol' IDENTIFIER ';'"""
-        self.eat(T_BARYABOL)
+        """declaration → 'var' IDENTIFIER ';'"""
+        self.eat(T_VAR)
         var_token = self.current_token
         self.eat(T_ID)
         var_node = Var(var_token)
@@ -196,8 +197,8 @@ class Parser:
         return VarDecl(var_node)
 
     def input_stmt(self) -> InputStmt:
-        """input_stmt → 'kuha' IDENTIFIER ';'"""
-        self.eat(T_KUHA)
+        """input_stmt → 'input' IDENTIFIER ';'"""
+        self.eat(T_INPUT)
         var_token = self.current_token
         self.eat(T_ID)
         var_node = Var(var_token)
@@ -205,8 +206,8 @@ class Parser:
         return InputStmt(var_node)
 
     def output_stmt(self) -> OutputStmt:
-        """output_stmt → 'ipakita' IDENTIFIER ';'"""
-        self.eat(T_IPAKITA)
+        """output_stmt → 'output' IDENTIFIER ';'"""
+        self.eat(T_OUTPUT)
         var_token = self.current_token
         self.eat(T_ID)
         var_node = Var(var_token)
@@ -214,8 +215,7 @@ class Parser:
         return OutputStmt(var_node)
 
     def assignment(self) -> Assignment:
-        """assignment → 'lagay' IDENTIFIER '=' expression ';'"""
-        self.eat(T_LAGAY)
+        """assignment → IDENTIFIER '=' expression ';'"""
         var_token = self.current_token
         self.eat(T_ID)
         var_node = Var(var_token)

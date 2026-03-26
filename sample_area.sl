@@ -1,15 +1,14 @@
 /* ============================================ */
-/* SALITA Sample 2 - Area ng Parihaba           */
-/* (Rectangle area calculator)                  */
+/* SALITA Sample 2 - Rectangle Area Calculator */
 /* ============================================ */
 
-baryabol haba;
-baryabol lapad;
-baryabol area;
+var length;
+var width;
+var area;
 
-kuha haba;
-kuha lapad;
+input length;
+input width;
 
-lagay area = haba * lapad;
+area = length * width;
 
-ipakita area;
+output area;
