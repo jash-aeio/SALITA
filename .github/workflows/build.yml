@@ -28,3 +28,26 @@ jobs:
         with:
           name: SALITA_IDE-windows
           path: dist/SALITA_IDE.exe
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pyinstaller
+
+      - name: Build macOS app
+        run: pyinstaller --onefile --windowed --name "SALITA_IDE" main.py
+
+      - name: Upload macOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: SALITA_IDE-macos
+          path: dist/SALITA_IDE
